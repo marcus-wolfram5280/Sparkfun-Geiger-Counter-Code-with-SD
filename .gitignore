@@ -1,0 +1,92 @@
+// Sparkfun Geiger Counter code with SD card write
+
+//Include Files for SD card
+#include <SD.h>
+
+// Controls for the data logging system
+const int LOG_INTERVAL = 0;   // milli seconds between entries
+
+// Time keeper
+uint32_t timeStamp = 0;     // The time stamp used when recording data points
+
+const int chipSelect = 8;  // This is set to 8 for the SparkFun uSDCard shield
+
+// Variable for file name
+char logFileName[16];
+
+// Global variables
+// GC output is connected to pin 18
+const unsigned int gc_pin = 2;
+
+// Attach 5th interrupt of the Arduino Mega.
+const unsigned int gc_intnumber = 0;
+
+// Declared volatile because two threads of execution are using it.
+// Value is initially set to zero because there are no counts.
+volatile unsigned int gc_counts = 0;
+
+// gc_cnt to store the number of counts
+// from gc_counts no counts are missed
+// while writing to buffer
+unsigned int gc_cnt;
+
+// This variable will hold the data from a read cycle
+String dataString = "";
+
+//  Titles for column headings
+String sensorNames = "Time Stamp (ms), GC counts";
+
+// Function for interrupt
+// gc_counts is increased by 1
+// every time function called.
+// void loop will reset when written memory
+void gc_interrupt() {
+  gc_counts++;
+}
+
+void setup() {
+  // Sets up communication with computer
+  Serial.begin(9600);
+
+  // Sets up gc_pin as input
+  pinMode(gc_pin, INPUT);
+
+  // This function will set up the SD card so we can write to it.
+  // Also the header of the log file will be written to the file.
+  SDCardInit();
+
+  // Sets up the interrupt to trigger for a rising edge
+  // gc_pin (18) corresponds to the 5th interrupt gc_intnumber
+  // gc_interrupt is the function we want to call once we detect an interrupt
+  attachInterrupt(gc_intnumber, gc_interrupt, RISING);
+}
+
+void loop() {
+  // delay 5 secconds
+  delay(1000);
+
+  // Clear out dataString to start a new record.
+  dataString = "";
+
+  // Log the time
+  timeStamp = millis();
+  dataString = String(timeStamp);
+
+  gc_cnt = gc_counts;
+  gc_counts = 0;
+
+  dataString = dataString + ", " + String(gc_cnt); //append geiger info to time stamp
+  
+  // prints results on screen
+  Serial.println(gc_cnt);
+
+  // [SD_WRITE]
+  // Write data to SD file prepared by dataSD::setupMemory().
+  // This appends this data to the end of the file
+  if (writeDataToSD()) {
+    Serial.println(dataString);
+  }
+  else {
+     Serial.println("SD Card Error");
+  }
+}
